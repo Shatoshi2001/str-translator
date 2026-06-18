@@ -1,6 +1,6 @@
 {
   "name": "srt-translator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Import SRT and translate subtitles via ChatGPT web",
   "main": "main.js",
   "author": "Shatoshi2001",
@@ -37,6 +37,7 @@
       "!**/.gitignore"
     ],
     "win": {
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",
