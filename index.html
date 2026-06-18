@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-src https://chatgpt.com https://chat.openai.com https://*.openai.com https://auth.openai.com;">
+  <title>SRT Translator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <header class="app-header">
+    <div class="app-title">SRT Translator</div>
+    <div class="toolbar">
+      <button id="btn-open" class="btn btn-blue" type="button">
+        <span class="btn-icon" aria-hidden="true"></span> Mở file
+      </button>
+      <button id="btn-translate" class="btn btn-green" type="button" disabled>
+        <span class="btn-icon" aria-hidden="true"></span> Dịch (ChatGPT)
+      </button>
+      <button id="btn-stop" class="btn btn-red" type="button" disabled>
+        <span class="btn-icon" aria-hidden="true"></span> Dừng
+      </button>
+      <button id="btn-export" class="btn btn-purple" type="button" disabled>
+        <span class="btn-icon" aria-hidden="true"></span> Xuất SRT
+      </button>
+      <div class="toolbar-spacer"></div>
+      <label class="field">
+        Dịch sang
+        <select id="translate-to">
+          <option value="vi" selected>Tiếng Việt</option>
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="th">ไทย</option>
+          <option value="id">Bahasa Indonesia</option>
+          <option value="fr">Français</option>
+          <option value="es">Español</option>
+        </select>
+      </label>
+    </div>
+  </header>
+
+  <div class="error-banner hidden" id="error-banner"></div>
+
+  <main class="dashboard" id="main-layout">
+    <aside class="sidebar-left">
+      <section class="card">
+        <h3 class="card-title">Tệp hiện tại</h3>
+        <div class="file-name-lg" id="stat-file-name">Chưa mở file</div>
+        <div class="file-path muted" id="stat-file-path">—</div>
+        <dl class="stat-grid">
+          <div><dt>Tổng dòng</dt><dd id="stat-total">0</dd></div>
+          <div><dt>Đã dịch</dt><dd id="stat-done" class="text-green">0</dd></div>
+          <div><dt>Còn lại</dt><dd id="stat-remaining">0</dd></div>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title">Tiến độ dịch</h3>
+        <div class="progress-ring-wrap">
+          <svg class="progress-ring" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="progress-ring-bg" cx="60" cy="60" r="52"></circle>
+            <circle class="progress-ring-fill" id="progress-ring-fill" cx="60" cy="60" r="52"></circle>
+          </svg>
+          <div class="progress-ring-label">
+            <span class="progress-pct" id="progress-pct">0%</span>
+            <span class="progress-sub" id="progress-sub">0 / 0 dòng</span>
+          </div>
+        </div>
+        <dl class="time-grid">
+          <div><dt>Thời gian</dt><dd id="stat-elapsed">00:00:00</dd></div>
+          <div><dt>Còn lại (ước)</dt><dd id="stat-eta">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h3 class="card-title">Thông tin dịch</h3>
+        <dl class="info-list">
+          <div><dt>Model</dt><dd>ChatGPT (webview)</dd></div>
+          <div><dt>Ngôn ngữ</dt><dd id="stat-lang">— → Tiếng Việt</dd></div>
+          <div><dt>Batch</dt><dd id="stat-batch">50 dòng/lần</dd></div>
+        </dl>
+      </section>
+
+      <section class="card card-grow">
+        <h3 class="card-title">Nhật ký hệ thống</h3>
+        <div class="system-log" id="system-log">
+          <div class="log-entry muted">Sẵn sàng — mở file .srt để bắt đầu.</div>
+        </div>
+      </section>
+    </aside>
+
+    <section class="center-panel">
+      <div class="panel-toolbar">
+        <input type="search" id="search-input" class="search-input" placeholder="Tìm theo nội dung gốc hoặc bản dịch…" disabled>
+        <select id="filter-status" class="filter-select" disabled>
+          <option value="all">Tất cả trạng thái</option>
+          <option value="done">Đã dịch</option>
+          <option value="edited">Đã sửa</option>
+          <option value="translating">Đang dịch</option>
+          <option value="waiting">Chờ dịch</option>
+        </select>
+        <span class="count-badge" id="cue-count">0 dòng</span>
+      </div>
+      <div class="subtitle-list" id="subtitle-list">
+        <p class="empty-state">Mở file .srt để bắt đầu dịch phụ đề.</p>
+      </div>
+    </section>
+
+    <aside class="sidebar-right" id="chatgpt-section">
+      <div class="chatgpt-rail">
+        <button type="button" id="btn-toggle-chatgpt" class="btn-rail" title="Thu gọn ChatGPT" aria-label="Thu gọn ChatGPT"></button>
+      </div>
+      <div class="chatgpt-drawer" id="chatgpt-drawer">
+        <section class="prompt-card">
+          <div class="prompt-header">
+            <h3 class="card-title">Prompt đang sử dụng</h3>
+          </div>
+          <pre class="prompt-preview" id="prompt-preview">Chọn ngôn ngữ đích và bấm Dịch để xem prompt gửi tới ChatGPT.</pre>
+        </section>
+
+        <section class="chatgpt-panel">
+          <div class="panel-header">
+            <h3 class="card-title">ChatGPT</h3>
+            <div class="chatgpt-actions">
+              <button type="button" id="btn-chatgpt-email" class="btn btn-sm" title="Đăng nhập email">Đăng nhập</button>
+            </div>
+          </div>
+          <div class="login-banner" id="login-banner">
+            Bấm <strong>Đăng nhập</strong> → email + mật khẩu ChatGPT (không Google).
+          </div>
+          <webview
+            id="chatgpt-webview"
+            src="https://chatgpt.com/"
+            partition="persist:chatgpt-srt"
+            allowpopups
+            webpreferences="contextIsolation=no, sandbox=no, javascript=yes, nativeWindowOpen=yes"
+          ></webview>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="status-bar">
+    <span class="status-text" id="status-text">Sẵn sàng</span>
+    <button type="button" class="version-btn" id="btn-check-update" title="Kiểm tra cập nhật">v1.0.0</button>
+    <div class="status-progress">
+      <span class="status-detail" id="progress-text">Chưa có tác vụ</span>
+      <div class="status-bar-track">
+        <div class="status-bar-fill" id="progress-fill"></div>
+      </div>
+      <span class="status-pct" id="footer-pct">0%</span>
+    </div>
+  </footer>
+
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <div id="retranslate-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="retranslate-modal-title">
+    <div class="modal-card">
+      <h3 class="modal-title" id="retranslate-modal-title">Dịch lại dòng</h3>
+      <p class="modal-label">Thoại gốc</p>
+      <div class="modal-original" id="retranslate-original"></div>
+      <label class="modal-check">
+        <input type="checkbox" id="retranslate-custom-toggle" />
+        <span>Tùy chỉnh prompt gửi ChatGPT</span>
+      </label>
+      <textarea id="retranslate-prompt" class="modal-textarea" rows="12" disabled placeholder="Prompt gửi tới ChatGPT…"></textarea>
+      <p class="modal-hint" id="retranslate-hint">Bỏ chọn để dùng prompt mặc định. Khi tùy chỉnh: Ctrl+Enter để dịch lại.</p>
+      <div class="modal-actions">
+        <button type="button" id="retranslate-cancel" class="cue-edit-btn cancel">Hủy</button>
+        <button type="button" id="retranslate-confirm" class="cue-edit-btn save">Dịch lại</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="icons.js"></script>
+  <script src="srt-parser.js"></script>
+  <script src="chatgpt-translator.js"></script>
+  <script src="renderer.js"></script>
+</body>
+
+</html>

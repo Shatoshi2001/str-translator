@@ -1,0 +1,61 @@
+{
+  "name": "srt-translator",
+  "version": "1.0.0",
+  "description": "Import SRT and translate subtitles via ChatGPT web",
+  "main": "main.js",
+  "author": "Shatoshi2001",
+  "license": "MIT",
+  "homepage": "https://github.com/Shatoshi2001/str-translator",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Shatoshi2001/str-translator.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "build:dir": "electron-builder --win --dir",
+    "release": "electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.shatoshi2001.srt-translator",
+    "productName": "SRT Translator",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!.github/**",
+      "!**/*.md",
+      "!**/.gitignore"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "SRT Translator"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Shatoshi2001",
+      "repo": "str-translator"
+    }
+  }
+}
