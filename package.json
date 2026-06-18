@@ -1,6 +1,6 @@
 {
   "name": "srt-translator",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Import SRT and translate subtitles via ChatGPT web",
   "main": "main.js",
   "author": "Shatoshi2001",
