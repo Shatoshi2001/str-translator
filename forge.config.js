@@ -32,6 +32,7 @@ module.exports = {
           owner: 'Shatoshi2001',
           name: 'str-translator',
         },
+        draft: false,
       },
     },
   ],
