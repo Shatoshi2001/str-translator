@@ -2,18 +2,6 @@ const https = require('https');
 const { app, dialog, shell, BrowserWindow } = require('electron');
 const pkg = require('./package.json');
 
-let autoUpdater = null;
-
-function getAutoUpdater() {
-  if (!app.isPackaged) return null;
-  if (!autoUpdater) {
-    ({ autoUpdater } = require('electron-updater'));
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-  }
-  return autoUpdater;
-}
-
 function parseGitHubRepo() {
   const candidates = [
     pkg.repository?.url,
@@ -94,105 +82,6 @@ function notifyRenderer(parentWindow, payload) {
   }
 }
 
-function setupAutoUpdaterListeners(parentWindow) {
-  const updater = getAutoUpdater();
-  if (!updater || updater.__listenersReady) return updater;
-
-  updater.on('update-available', (info) => {
-    notifyRenderer(parentWindow, {
-      status: 'available',
-      current: pkg.version,
-      latest: normalizeVersion(info.version),
-      name: info.releaseName,
-    });
-  });
-
-  updater.on('update-downloaded', (info) => {
-    const win = parentWindow && !parentWindow.isDestroyed()
-      ? parentWindow
-      : BrowserWindow.getFocusedWindow();
-
-    dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'Đã tải bản cập nhật',
-      message: `SRT Translator v${normalizeVersion(info.version)} sẵn sàng cài đặt`,
-      detail: 'Khởi động lại app để áp dụng bản mới.',
-      buttons: ['Khởi động lại', 'Để sau'],
-      defaultId: 0,
-      cancelId: 1,
-    }).then(({ response }) => {
-      if (response === 0) {
-        updater.quitAndInstall(false, true);
-      }
-    }).catch(() => {});
-  });
-
-  updater.on('error', () => {
-    /* lỗi mạng — im lặng khi check nền */
-  });
-
-  updater.__listenersReady = true;
-  return updater;
-}
-
-async function checkWithAutoUpdater(parentWindow, options = {}) {
-  const updater = setupAutoUpdaterListeners(parentWindow);
-  if (!updater) {
-    return checkForUpdates();
-  }
-
-  try {
-    const result = await updater.checkForUpdates();
-    const remote = result?.updateInfo;
-    const latest = normalizeVersion(remote?.version);
-    const current = normalizeVersion(pkg.version);
-
-    if (latest && compareVersions(latest, current) > 0) {
-      const payload = {
-        status: 'available',
-        current,
-        latest,
-        name: remote?.releaseName || `v${latest}`,
-        body: String(remote?.releaseNotes || '').trim(),
-      };
-
-      if (options.manual) {
-        await dialog.showMessageBox(parentWindow, {
-          type: 'info',
-          title: 'Đang tải bản cập nhật',
-          message: `SRT Translator v${latest} đã có.`,
-          detail: 'App đang tải bản mới ở nền. Khi xong sẽ hỏi khởi động lại.',
-          buttons: ['OK'],
-        });
-      }
-
-      notifyRenderer(parentWindow, payload);
-      return payload;
-    }
-
-    if (options.manual) {
-      await dialog.showMessageBox(parentWindow, {
-        type: 'info',
-        title: 'Đã là bản mới nhất',
-        message: `SRT Translator v${current} đã cập nhật.`,
-        buttons: ['OK'],
-      });
-    }
-
-    return { status: 'current', current, latest: latest || current };
-  } catch (err) {
-    if (options.manual) {
-      await dialog.showMessageBox(parentWindow, {
-        type: 'warning',
-        title: 'Không kiểm tra được cập nhật',
-        message: String(err.message || err),
-        buttons: ['OK'],
-      });
-    }
-    return { status: 'error', message: String(err.message || err), current: pkg.version };
-  }
-}
-
 async function checkForUpdates() {
   const repo = parseGitHubRepo();
   if (!repo) {
@@ -227,11 +116,44 @@ async function checkForUpdates() {
 }
 
 async function promptUpdateIfAvailable(parentWindow, options = {}) {
-  if (app.isPackaged) {
-    return checkWithAutoUpdater(parentWindow, options);
+  const result = await checkForUpdates();
+
+  if (result.status === 'no-repo') {
+    if (options.manual) {
+      await dialog.showMessageBox(parentWindow, {
+        type: 'warning',
+        title: 'Chưa cấu hình GitHub',
+        message: 'Chưa thiết lập repository GitHub trong package.json.',
+        buttons: ['OK'],
+      });
+    }
+    return result;
   }
 
-  const result = await checkForUpdates();
+  if (result.status === 'error') {
+    if (options.manual) {
+      await dialog.showMessageBox(parentWindow, {
+        type: 'warning',
+        title: 'Không kiểm tra được cập nhật',
+        message: result.message || 'Lỗi không xác định',
+        buttons: ['OK'],
+      });
+    }
+    return result;
+  }
+
+  if (result.status === 'current') {
+    if (options.manual) {
+      await dialog.showMessageBox(parentWindow, {
+        type: 'info',
+        title: 'Đã là bản mới nhất',
+        message: `SRT Translator v${result.current} đã cập nhật.`,
+        buttons: ['OK'],
+      });
+    }
+    return result;
+  }
+
   if (result.status !== 'available') {
     return result;
   }
@@ -244,6 +166,9 @@ async function promptUpdateIfAvailable(parentWindow, options = {}) {
     `Phiên bản hiện tại: v${result.current}`,
     `Phiên bản mới: v${result.latest}`,
   ];
+  if (app.isPackaged) {
+    detailParts.push('', 'App đã bật tự cập nhật — bản mới sẽ được tải ở nền.');
+  }
   if (result.body) {
     detailParts.push('', result.body.slice(0, 500) + (result.body.length > 500 ? '…' : ''));
   }
@@ -272,8 +197,6 @@ async function promptUpdateIfAvailable(parentWindow, options = {}) {
 
 module.exports = {
   checkForUpdates,
-  checkWithAutoUpdater,
   promptUpdateIfAvailable,
-  setupAutoUpdaterListeners,
   getAppVersion: () => pkg.version,
 };

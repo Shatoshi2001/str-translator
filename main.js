@@ -1,7 +1,7 @@
 const { app, BrowserWindow, dialog, ipcMain, webContents, session, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { checkForUpdates, checkWithAutoUpdater, promptUpdateIfAvailable, getAppVersion, setupAutoUpdaterListeners } = require('./update-checker');
+const { promptUpdateIfAvailable, getAppVersion } = require('./update-checker');
 
 const CHATGPT_PARTITION = 'persist:chatgpt-srt';
 const CHATGPT_EMAIL_LOGIN_URL = 'https://auth.openai.com/log-in-or-create-account';
@@ -112,13 +112,19 @@ function setupApplicationMenu() {
 }
 
 function scheduleUpdateCheck() {
+  if (app.isPackaged) {
+    try {
+      require('update-electron-app')({
+        repo: 'Shatoshi2001/str-translator',
+        updateInterval: '4 hours',
+      });
+    } catch (e) {
+      /* update-electron-app không chặn khởi động app */
+    }
+  }
+
   setTimeout(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (app.isPackaged) {
-      setupAutoUpdaterListeners(mainWindow);
-      checkWithAutoUpdater(mainWindow, { notifyRenderer: true }).catch(() => {});
-      return;
-    }
     promptUpdateIfAvailable(mainWindow, { notifyRenderer: true }).catch(() => {});
   }, 4000);
 }
@@ -217,35 +223,5 @@ ipcMain.handle('webview-key', async (_event, guestId, key) => {
 ipcMain.handle('get-app-version', () => getAppVersion());
 
 ipcMain.handle('check-for-updates', async () => {
-  if (app.isPackaged) {
-    return checkWithAutoUpdater(mainWindow, { manual: true });
-  }
-
-  const result = await checkForUpdates();
-  if (result.status === 'available') {
-    await promptUpdateIfAvailable(mainWindow, { notifyRenderer: true });
-  } else if (result.status === 'current') {
-    await dialog.showMessageBox(mainWindow, {
-      type: 'info',
-      title: 'Đã là bản mới nhất',
-      message: `SRT Translator v${result.current} đã cập nhật.`,
-      buttons: ['OK'],
-    });
-  } else if (result.status === 'no-repo') {
-    await dialog.showMessageBox(mainWindow, {
-      type: 'warning',
-      title: 'Chưa cấu hình GitHub',
-      message: 'Chưa thiết lập repository GitHub trong package.json.',
-      detail: 'Sửa trường repository.url thành repo GitHub của bạn (vd: https://github.com/user/srt-translator.git).',
-      buttons: ['OK'],
-    });
-  } else {
-    await dialog.showMessageBox(mainWindow, {
-      type: 'warning',
-      title: 'Không kiểm tra được cập nhật',
-      message: result.message || 'Lỗi không xác định',
-      buttons: ['OK'],
-    });
-  }
-  return result;
+  return promptUpdateIfAvailable(mainWindow, { manual: true, notifyRenderer: true });
 });
